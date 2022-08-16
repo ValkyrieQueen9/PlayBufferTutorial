@@ -18,7 +18,7 @@ struct GameState
 {
 	int score = 0;
 	Agent8State agentState = STATE_APPEAR;
-}; d
+};
 
 GameState gameState;
 
