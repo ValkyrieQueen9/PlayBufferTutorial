@@ -12,6 +12,7 @@ enum Agent8State
 	STATE_HALT,
 	STATE_PLAY,
 	STATE_DEAD,
+	STATE_BOSS
 };
 
 struct GameState
@@ -32,6 +33,7 @@ enum GameObjectType
 	TYPE_STAR,
 	TYPE_LASER,
 	TYPE_DESTROYED,
+	TYPE_BOSS,
 };
 
 void HandlePlayerControls();
@@ -41,6 +43,7 @@ void UpdateCoinsAndStars();
 void UpdateLasers();
 void UpdateDestroyed();
 void UpdateAgent8();
+void UpdateBoss();
 
 // The entry point for a PlayBuffer program
 void MainGameEntry(PLAY_IGNORE_COMMAND_LINE)
@@ -67,6 +70,7 @@ bool MainGameUpdate( float elapsedTime )
 	UpdateDestroyed();
 	Play::DrawFontText("64px", "ARROW KEYS TO MOVE UP AND DOWN AND SPACE TO FIRE", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT - 30 }, Play::CENTRE);
 	Play::DrawFontText("132px", "SCORE: " + std::to_string(gameState.score), { DISPLAY_WIDTH / 2, 50 }, Play::CENTRE);
+	Play::DrawFontText("132px", "Agent State: " + std::to_string(gameState.agentState), { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 }, Play::CENTRE);
 	Play::PresentDrawingBuffer();
 	return Play::KeyDown( VK_ESCAPE );
 }
@@ -118,30 +122,39 @@ void HandlePlayerControls()
 void UpdateFan()
 {
 	GameObject& obj_fan = Play::GetGameObjectByType(TYPE_FAN);
-	if (Play::RandomRoll(50) == 50)
-	{
-		int id = Play::CreateGameObject(TYPE_TOOL, obj_fan.pos, 50, "driver");
-		GameObject& obj_tool = Play::GetGameObject(id);
-		obj_tool.velocity = Point2f(-8, Play::RandomRollRange(-1, 1) * 6);
 
-		if (Play::RandomRoll(2) == 1)
+	if (gameState.agentState == STATE_PLAY)
+	{
+		if (Play::RandomRoll(50) == 50)
 		{
-			Play::SetSprite(obj_tool, "spanner", 0);
-			obj_tool.radius = 100;
-			obj_tool.velocity.x = -4;
-			obj_tool.rotSpeed = 0.1f;
+			int id = Play::CreateGameObject(TYPE_TOOL, obj_fan.pos, 50, "driver");
+			GameObject& obj_tool = Play::GetGameObject(id);
+			obj_tool.velocity = Point2f(-8, Play::RandomRollRange(-1, 1) * 6);
+
+			if (Play::RandomRoll(2) == 1)
+			{
+				Play::SetSprite(obj_tool, "spanner", 0);
+				obj_tool.radius = 100;
+				obj_tool.velocity.x = -4;
+				obj_tool.rotSpeed = 0.1f;
+			}
+			Play::PlayAudio("tool");
 		}
-		Play::PlayAudio("tool");
-	}
-	if (Play::RandomRoll(150) == 1)
-	{
-		int id = Play::CreateGameObject(TYPE_COIN, obj_fan.pos, 40, "coin");
-		GameObject& obj_coin = Play::GetGameObject(id);
-		obj_coin.velocity = { -3,0 };
-		obj_coin.rotSpeed = 0.1f;
+
+		if (Play::RandomRoll(150) == 1)
+		{
+			int id = Play::CreateGameObject(TYPE_COIN, obj_fan.pos, 40, "coin");
+			GameObject& obj_coin = Play::GetGameObject(id);
+			obj_coin.velocity = { -3,0 };
+			obj_coin.rotSpeed = 0.1f;
+		}
 	}
 
-	Play::UpdateGameObject(obj_fan);
+	if (gameState.agentState == STATE_BOSS)
+		{
+			UpdateBoss();
+		}
+		Play::UpdateGameObject(obj_fan);
 
 	if (Play::IsLeavingDisplayArea(obj_fan))
 	{
@@ -293,23 +306,42 @@ void UpdateAgent8()
 
 	switch (gameState.agentState)
 	{
+
 	case STATE_APPEAR:
-		obj_agent8.velocity = { 0,12 };
-		obj_agent8.acceleration = { 0, 0.5f };
-		Play::SetSprite(obj_agent8, "agent8_fall", 0);
-		obj_agent8.rotation = 0;
-		if (obj_agent8.pos.y >= DISPLAY_HEIGHT / 3)
-			gameState.agentState = STATE_PLAY;
+		if (gameState.agentState != STATE_BOSS)
+		{
+			obj_agent8.velocity = { 0,12 };
+			obj_agent8.acceleration = { 0, 0.5f };
+			Play::SetSprite(obj_agent8, "agent8_fall", 0);
+			obj_agent8.rotation = 0;
+			if (obj_agent8.pos.y >= DISPLAY_HEIGHT / 3)
+				gameState.agentState = STATE_PLAY;
+		}
 		break;
 
 	case STATE_HALT:
-		obj_agent8.velocity *= 0.9f;
-		if (Play::IsAnimationComplete(obj_agent8))
-			gameState.agentState = STATE_PLAY;
+		if (gameState.agentState != STATE_BOSS)
+		{
+			obj_agent8.velocity *= 0.9f;
+			if (Play::IsAnimationComplete(obj_agent8))
+			{
+				gameState.agentState = STATE_PLAY;
+			}
+		}
+		else;
 		break;
 
 	case STATE_PLAY:
 		HandlePlayerControls();
+		if (gameState.score >= 500)
+		{
+			gameState.agentState = STATE_BOSS;
+		}
+		break;
+
+	case STATE_BOSS:
+		UpdateBoss();
+		HandlePlayerControls(); 
 		break;
 
 	case STATE_DEAD:
@@ -338,5 +370,45 @@ void UpdateAgent8()
 	Play::DrawLine({ obj_agent8.pos.x, 0 }, obj_agent8.pos, Play::cWhite);
 	Play::DrawObjectRotated(obj_agent8);
 }
+
+void UpdateBoss()
+{
+
+	GameObject& obj_fan = Play::GetGameObjectByType(TYPE_FAN);
+
+	Play::DrawFontText("64px", "BOSS EVENT", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 3 }, Play::CENTRE);
+		
+	int id = Play::CreateGameObject(TYPE_BOSS, { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 3 }, 50, "driver");
+	GameObject& obj_boss = Play::GetGameObject(id);
+
+	obj_boss.velocity = Point2f(-8, Play::RandomRollRange(-1, 1) * 6);
+	obj_boss.radius = 100;
+	obj_boss.scale = 4.0f;
+	obj_boss.velocity.x = -4;
+	//Trying to get boss driver to move!
+	Play::DrawObject(obj_boss);
+
+	//Play::UpdateGameObject(obj_boss);
+
+	/*
+	if (Play::IsVisible(obj_boss))
+		{
+		gameState.agentState = STATE_PLAY;
+		}
+	*/
+
+	}
+
+
+
+	//Create large boss with screwdriver sprite and add coins after
+		//Maybe: make sprite poke out once then fast move out + make it killable with more shoots
+
+	//Once boss is off display either destroyed or leaves - restart update tools
+
+	//Make sure game runs properly if restarted
+
+	//Later: Add effects if killed or make it fade as you shoot
+
 
 
