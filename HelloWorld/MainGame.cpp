@@ -19,6 +19,7 @@ struct GameState
 {
 	int score = 0;
 	Agent8State agentState = STATE_APPEAR;
+	int bossEvent = 0;
 };
 
 GameState gameState;
@@ -68,9 +69,10 @@ bool MainGameUpdate( float elapsedTime )
 	UpdateCoinsAndStars();
 	UpdateLasers();
 	UpdateDestroyed();
+	UpdateBoss();
 	Play::DrawFontText("64px", "ARROW KEYS TO MOVE UP AND DOWN AND SPACE TO FIRE", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT - 30 }, Play::CENTRE);
 	Play::DrawFontText("132px", "SCORE: " + std::to_string(gameState.score), { DISPLAY_WIDTH / 2, 50 }, Play::CENTRE);
-	Play::DrawFontText("132px", "Agent State: " + std::to_string(gameState.agentState), { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 }, Play::CENTRE);
+	Play::DrawFontText("64px", "State: " + std::to_string(gameState.agentState), { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 3}, Play::CENTRE);
 	Play::PresentDrawingBuffer();
 	return Play::KeyDown( VK_ESCAPE );
 }
@@ -99,9 +101,12 @@ void HandlePlayerControls()
 	{
 		if (obj_agent8.velocity.y > 5)
 		{
-			gameState.agentState = STATE_HALT;
 			Play::SetSprite(obj_agent8, "agent8_halt", 0.333f);
 			obj_agent8.acceleration = { 0, 0 };
+			if (gameState.agentState != STATE_BOSS)
+			{
+			gameState.agentState = STATE_HALT;
+			}
 		}
 		else
 		{
@@ -149,11 +154,6 @@ void UpdateFan()
 			obj_coin.rotSpeed = 0.1f;
 		}
 	}
-
-	if (gameState.agentState == STATE_BOSS)
-		{
-			UpdateBoss();
-		}
 		Play::UpdateGameObject(obj_fan);
 
 	if (Play::IsLeavingDisplayArea(obj_fan))
@@ -333,14 +333,9 @@ void UpdateAgent8()
 
 	case STATE_PLAY:
 		HandlePlayerControls();
-		if (gameState.score >= 500)
-		{
-			gameState.agentState = STATE_BOSS;
-		}
 		break;
 
 	case STATE_BOSS:
-		UpdateBoss();
 		HandlePlayerControls(); 
 		break;
 
@@ -373,31 +368,29 @@ void UpdateAgent8()
 
 void UpdateBoss()
 {
+	if (gameState.score >= 500 && gameState.bossEvent == 0)
+	{
+		gameState.agentState = STATE_BOSS;
+		GameObject& obj_fan = Play::GetGameObjectByType(TYPE_FAN);
 
-	GameObject& obj_fan = Play::GetGameObjectByType(TYPE_FAN);
+		Play::DrawFontText("132px", "INCOMING!!!", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 3 }, Play::CENTRE);
 
-	Play::DrawFontText("64px", "BOSS EVENT", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 3 }, Play::CENTRE);
-		
-	int id = Play::CreateGameObject(TYPE_BOSS, { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 3 }, 50, "driver");
-	GameObject& obj_boss = Play::GetGameObject(id);
+		int id = Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 50, "driver_boss");
+		GameObject& obj_boss = Play::GetGameObjectByType(TYPE_BOSS);
+		obj_boss.velocity.x = { -3 };
 
-	obj_boss.velocity = Point2f(-8, Play::RandomRollRange(-1, 1) * 6);
-	obj_boss.radius = 100;
-	obj_boss.scale = 4.0f;
-	obj_boss.velocity.x = -4;
-	//Trying to get boss driver to move!
-	Play::DrawObject(obj_boss);
+		Play::DrawObject(obj_boss);
+		Play::UpdateGameObject(obj_boss);
 
-	//Play::UpdateGameObject(obj_boss);
-
-	/*
-	if (Play::IsVisible(obj_boss))
+		if (Play::IsLeavingDisplayArea(obj_boss, Play::HORIZONTAL))
 		{
-		gameState.agentState = STATE_PLAY;
+			Play::DestroyGameObject(id);
+			gameState.bossEvent +1;
+			gameState.agentState = STATE_PLAY;
+			Play::DrawFontText("132px", "event over", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 3 }, Play::CENTRE);
 		}
-	*/
-
 	}
+}
 
 
 
