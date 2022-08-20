@@ -20,7 +20,7 @@ struct GameState
 	int score = 0;
 	Agent8State agentState = STATE_APPEAR;
 	int bossEvent = 0;
-	float bossTimer = 0;
+	bool toolsGone = false;
 };
 
 GameState gameState;
@@ -190,7 +190,12 @@ void UpdateTools()
 		Play::DrawObjectRotated(obj_tool);
 
 		if (!Play::IsVisible(obj_tool))
+		{
 			Play::DestroyGameObject(id);
+			gameState.toolsGone = true;
+			if(gameState.toolsGone)
+			Play::DrawFontText("64px", "ToolsGone = true", { DISPLAY_WIDTH / 2, 500 }, Play::CENTRE);
+		}
 	}
 }
 
@@ -369,30 +374,33 @@ void UpdateAgent8()
 
 void UpdateBoss()
 {
+	//trying to make pause before boss event. Added toolsGone bool in gamestate and updatetools. Not working
 
 	if (gameState.score >= 500 && gameState.bossEvent == 0)
 	{
-		gameState.bossTimer +1;
-
 		gameState.agentState = STATE_BOSS;
 		GameObject& obj_fan = Play::GetGameObjectByType(TYPE_FAN);
-		Play::DrawFontText("132px", "Timer: " + std::to_string(gameState.bossTimer), { DISPLAY_WIDTH / 2, 500 }, Play::CENTRE);
 		Play::DrawFontText("132px", "INCOMING!!!", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 }, Play::CENTRE);
 
-		int id = Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 50, "driver_boss");
-		GameObject& obj_boss = Play::GetGameObjectByType(TYPE_BOSS);
-		obj_boss.velocity.x = { -3 };
-
-		Play::DrawObject(obj_boss);
-		Play::UpdateGameObject(obj_boss);
-
-		if (Play::IsLeavingDisplayArea(obj_boss, Play::HORIZONTAL))
+		if (gameState.toolsGone == true)
 		{
-			Play::DestroyGameObject(id);
-			gameState.bossEvent +1;
-			gameState.agentState = STATE_PLAY;
-			Play::DrawFontText("132px", "event over", { DISPLAY_WIDTH / 2, 600 }, Play::CENTRE);
+			int id = Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 50, "driver_boss");
+			GameObject& obj_boss = Play::GetGameObjectByType(TYPE_BOSS);
+			obj_boss.velocity.x = { -3 };
+			Play::DrawObject(obj_boss);
+			Play::UpdateGameObject(obj_boss);
+
+			if (Play::IsLeavingDisplayArea(obj_boss, Play::HORIZONTAL))
+			{
+				Play::DestroyGameObject(id);
+				gameState.bossEvent +1;
+				gameState.agentState = STATE_PLAY;
+				Play::DrawFontText("132px", "event over", { DISPLAY_WIDTH / 2, 600 }, Play::CENTRE);
+			}
 		}
+		
+
+		
 	}
 }
 
