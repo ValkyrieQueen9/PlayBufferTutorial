@@ -18,9 +18,9 @@ enum Agent8State
 struct GameState
 {
 	int score = 0;
-	int bossEvent = 0;
-	int collision = 0;
-	bool hasSpawnedBoss = false;
+	int bossEvent = 0; //used to keep track of boss events that happen
+	int collision = 0; //used to keep track of laser hits on boss
+	bool hasSpawnedBoss = false; //used to track when boss spawns 
 	Agent8State agentState = STATE_APPEAR;
 };
 
@@ -74,7 +74,6 @@ bool MainGameUpdate( float elapsedTime )
 	UpdateBoss();
 	Play::DrawFontText("64px", "ARROW KEYS TO MOVE UP AND DOWN AND SPACE TO FIRE", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT - 30 }, Play::CENTRE);
 	Play::DrawFontText("132px", "SCORE: " + std::to_string(gameState.score), { DISPLAY_WIDTH / 2, 50 }, Play::CENTRE);
-	Play::DrawFontText("64px", "State: " + std::to_string(gameState.agentState), { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 3}, Play::CENTRE);
 	Play::PresentDrawingBuffer();
 	return Play::KeyDown( VK_ESCAPE );
 }
@@ -171,6 +170,7 @@ void UpdateTools()
 {
 	GameObject& obj_agent8 = Play::GetGameObjectByType(TYPE_AGENT8);
 	std::vector<int> vTools = Play::CollectGameObjectIDsByType(TYPE_TOOL);
+
 	for (int id : vTools)
 	{
 		GameObject& obj_tool = Play::GetGameObject(id);
@@ -209,7 +209,7 @@ void UpdateCoinsAndStars()
 
 		if (Play::IsColliding(obj_coin, obj_agent8))
 		{
-			for (float rad{ 0.25f }; rad < 20.f; rad += 0.5f)
+			for (float rad{ 0.25f }; rad < 2.0f; rad += 0.5f)
 			{
 				int id = Play::CreateGameObject(TYPE_STAR, obj_agent8.pos, 0, "star");
 				GameObject& obj_star = Play::GetGameObject(id);
@@ -225,7 +225,9 @@ void UpdateCoinsAndStars()
 		Play::DrawObjectRotated(obj_coin);
 
 		if (!Play::IsVisible(obj_coin) || hasCollided)
+		{
 			Play::DestroyGameObject(id_coin);
+		}
 	}
 
 	std::vector<int> vStars = Play::CollectGameObjectIDsByType(TYPE_STAR);
@@ -238,7 +240,9 @@ void UpdateCoinsAndStars()
 		Play::DrawObjectRotated(obj_star);
 
 		if (!Play::IsVisible(obj_star))
+		{
 			Play::DestroyGameObject(id_star);
+		}
 	}
 }
 
@@ -265,14 +269,14 @@ void UpdateLasers()
 
 		for (int id_coin : vCoins)
 		{
-			GameObject& obj_coin = Play::GetGameObject(id_coin);
-			if (Play::IsColliding(obj_laser, obj_coin))
-			{
-				hasCollided = true;
-				obj_coin.type = TYPE_DESTROYED;
-				Play::PlayAudio("error");
-				gameState.score -= 300;
-			}
+				GameObject& obj_coin = Play::GetGameObject(id_coin);
+				if (Play::IsColliding(obj_laser, obj_coin) && gameState.agentState != STATE_BOSS)
+				{
+					hasCollided = true;
+					obj_coin.type = TYPE_DESTROYED;
+					Play::PlayAudio("error");
+					gameState.score -= 300;
+				}
 		}
 
 		GameObject& obj_boss = Play::GetGameObjectByType(TYPE_BOSS);
@@ -284,13 +288,18 @@ void UpdateLasers()
 			}
 
 		if (gameState.score < 0)
+		{
 			gameState.score = 0;
-
+		}
+	
 		Play::UpdateGameObject(obj_laser);
 		Play::DrawObject(obj_laser);
 
 		if (!Play::IsVisible(obj_laser) || hasCollided)
+		{
 			Play::DestroyGameObject(id_laser);
+		}
+
 	}
 }
 
@@ -305,10 +314,14 @@ void UpdateDestroyed()
 		Play::UpdateGameObject(obj_dead);
 
 		if (obj_dead.frame % 2)
+		{
 			Play::DrawObjectRotated(obj_dead, (10 - obj_dead.frame) / 10.0f);
+		}
 
 		if (!Play::IsVisible(obj_dead) || obj_dead.frame >= 10)
+		{
 			Play::DestroyGameObject(id_dead);
+		}
 	}
 }
 
@@ -319,96 +332,95 @@ void UpdateAgent8()
 	switch (gameState.agentState)
 	{
 
-	case STATE_APPEAR:
-		if (gameState.agentState != STATE_BOSS)
-		{
-			obj_agent8.velocity = { 0,12 };
-			obj_agent8.acceleration = { 0, 0.5f };
-			Play::SetSprite(obj_agent8, "agent8_fall", 0);
-			obj_agent8.rotation = 0;
-			if (obj_agent8.pos.y >= DISPLAY_HEIGHT / 3)
-				gameState.agentState = STATE_PLAY;
-		}
-		break;
-
-	case STATE_HALT:
-		if (gameState.agentState != STATE_BOSS)
-		{
-			obj_agent8.velocity *= 0.9f;
-			if (Play::IsAnimationComplete(obj_agent8))
+		case STATE_APPEAR:
+			if (gameState.agentState != STATE_BOSS)
 			{
-				gameState.agentState = STATE_PLAY;
+				obj_agent8.velocity = { 0,12 };
+				obj_agent8.acceleration = { 0, 0.5f };
+				Play::SetSprite(obj_agent8, "agent8_fall", 0);
+				obj_agent8.rotation = 0;
+				if (obj_agent8.pos.y >= DISPLAY_HEIGHT / 3)
+				{
+					gameState.agentState = STATE_PLAY;
+				}
 			}
-		}
-		else;
-		break;
+			break;
 
-	case STATE_PLAY:
-		HandlePlayerControls();
-		break;
-
-	case STATE_BOSS:
-		HandlePlayerControls(); 
-		break;
-
-	case STATE_DEAD:
-		obj_agent8.acceleration = { -0.3f, 0.5f };
-		obj_agent8.rotation += 0.25f;
-		if (Play::KeyPressed(VK_SPACE) == true)
-		{
-			gameState.agentState = STATE_APPEAR;
-			obj_agent8.pos = { 115, 0 };
-			obj_agent8.velocity = { 0, 0 };
-			obj_agent8.frame = 0;
-			Play::StartAudioLoop("music");
-			gameState.score = 0;
-			gameState.bossEvent = 0;
-			gameState.collision = 0;
-			gameState.hasSpawnedBoss = false;
-
-			for (int id_obj : Play::CollectGameObjectIDsByType(TYPE_TOOL))
+		case STATE_HALT:
+			if (gameState.agentState != STATE_BOSS)
 			{
-				Play::GetGameObject(id_obj).type = TYPE_DESTROYED;
+				obj_agent8.velocity *= 0.9f;
+				if (Play::IsAnimationComplete(obj_agent8))
+				{
+					gameState.agentState = STATE_PLAY;
+				}
 			}
-			for (int id_obj : Play::CollectGameObjectIDsByType(TYPE_BOSS))
+			else;
+			break;
+
+		case STATE_PLAY:
+			HandlePlayerControls();
+			break;
+
+		case STATE_BOSS:
+			HandlePlayerControls(); 
+			break;
+
+		case STATE_DEAD:
+			obj_agent8.acceleration = { -0.3f, 0.5f };
+			obj_agent8.rotation += 0.25f;
+			if (Play::KeyPressed(VK_SPACE) == true)
 			{
-				Play::DestroyGameObject(id_obj);
+				gameState.agentState = STATE_APPEAR;
+				obj_agent8.pos = { 115, 0 };
+				obj_agent8.velocity = { 0, 0 };
+				obj_agent8.frame = 0;
+				Play::StartAudioLoop("music");
+				gameState.score = 0;
+				gameState.bossEvent = 0;
+				gameState.collision = 0;
+				gameState.hasSpawnedBoss = false;
+
+				for (int id_obj : Play::CollectGameObjectIDsByType(TYPE_TOOL))
+				{
+					Play::GetGameObject(id_obj).type = TYPE_DESTROYED;
+				}
+				for (int id_obj : Play::CollectGameObjectIDsByType(TYPE_BOSS))
+				{
+					Play::DestroyGameObject(id_obj);
+				}
 			}
-		}
-		break;
+			break;
 	}
 
 	Play::UpdateGameObject(obj_agent8);
 
 	if (Play::IsLeavingDisplayArea(obj_agent8) && gameState.agentState != STATE_DEAD)
+	{
 		obj_agent8.pos = obj_agent8.oldPos;
+	}
 
 	Play::DrawLine({ obj_agent8.pos.x, 0 }, obj_agent8.pos, Play::cWhite);
 	Play::DrawObjectRotated(obj_agent8);
 }
 
-void UpdateBoss()
+void UpdateBoss() //Creates a boss event which spawns a larger driver
 {
-	bool hasCollided = false;
-	std::vector<int> vLasers = Play::CollectGameObjectIDsByType(TYPE_LASER);
 	GameObject& obj_fan = Play::GetGameObjectByType(TYPE_FAN);
 	GameObject& obj_boss = Play::GetGameObjectByType(TYPE_BOSS);
 	GameObject& obj_agent8 = Play::GetGameObjectByType(TYPE_AGENT8);
 
-	//delete at end
-	Play::DrawFontText("64px", "Boss Event number: " + std::to_string(gameState.bossEvent), { DISPLAY_WIDTH / 2, 400 }, Play::CENTRE);
-
 	//Starts Boss event if score is 500 and no event has occured yet
-	if (gameState.score >= 500 && gameState.bossEvent == 0 && gameState.agentState != STATE_DEAD)
+	if (gameState.score >= 1000 && gameState.bossEvent == 0 && gameState.agentState != STATE_DEAD)
 	{
 		gameState.agentState = STATE_BOSS;
 		Play::DrawFontText("132px", "INCOMING!!!", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 }, Play::CENTRE);
-		obj_boss.velocity.x = { -3 };
 
 		//Enters boss when all tools have left display and no boss has spawned yet
 		if (!Play::IsVisible(Play::GetGameObjectByType(TYPE_TOOL)) && gameState.hasSpawnedBoss == false)
 		{
-			int id = Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 100, "driver_boss");
+			Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 100, "driver_boss");
+			obj_boss.velocity.x = { -4 };
 			Play::PlayAudio("tool");
 			Play::DrawObject(obj_boss);
 			Play::UpdateGameObject(obj_boss);
@@ -418,11 +430,11 @@ void UpdateBoss()
 			}
 		}
 
-		//When boss has spawned check for its defeat or exit
+		//When boss has spawned check for its defeat, exit or agent death
 		if (gameState.hasSpawnedBoss)
 		{
 			//When boss is hit 5 times, destroy it
-			if (gameState.collision == 5)
+			if (gameState.collision == 8)
 			{
 				obj_boss.type = TYPE_DESTROYED;
 				gameState.score += 500;
@@ -432,7 +444,6 @@ void UpdateBoss()
 			if (!Play::IsVisible(obj_boss) || obj_boss.type == TYPE_DESTROYED || gameState.agentState == STATE_DEAD)
 			{
 				Play::DestroyGameObjectsByType(TYPE_BOSS);
-				Play::DrawFontText("132px", "event over", { DISPLAY_WIDTH / 2, 600 }, Play::CENTRE);
 				gameState.bossEvent++;
 				gameState.hasSpawnedBoss = false;
 					if (gameState.agentState != STATE_DEAD)
