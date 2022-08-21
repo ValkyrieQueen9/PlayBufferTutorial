@@ -367,7 +367,13 @@ void UpdateAgent8()
 			gameState.hasSpawnedBoss = false;
 
 			for (int id_obj : Play::CollectGameObjectIDsByType(TYPE_TOOL))
+			{
 				Play::GetGameObject(id_obj).type = TYPE_DESTROYED;
+			}
+			for (int id_obj : Play::CollectGameObjectIDsByType(TYPE_BOSS))
+			{
+				Play::DestroyGameObject(id_obj);
+			}
 		}
 		break;
 	}
@@ -392,7 +398,6 @@ void UpdateBoss()
 	//delete at end
 	Play::DrawFontText("64px", "Boss Event number: " + std::to_string(gameState.bossEvent), { DISPLAY_WIDTH / 2, 400 }, Play::CENTRE);
 
-
 	//Starts Boss event if score is 500 and no event has occured yet
 	if (gameState.score >= 500 && gameState.bossEvent == 0 && gameState.agentState != STATE_DEAD)
 	{
@@ -403,7 +408,7 @@ void UpdateBoss()
 		//Enters boss when all tools have left display and no boss has spawned yet
 		if (!Play::IsVisible(Play::GetGameObjectByType(TYPE_TOOL)) && gameState.hasSpawnedBoss == false)
 		{
-			Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 50, "driver_boss");
+			int id = Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 100, "driver_boss");
 			Play::PlayAudio("tool");
 			Play::DrawObject(obj_boss);
 			Play::UpdateGameObject(obj_boss);
@@ -423,11 +428,10 @@ void UpdateBoss()
 				gameState.score += 500;
 			}
 
-			//When boss has been destroyed or leaves display, mark event has over and begin play state again
+			//When boss has been destroyed, leaves display or agent dies, event is over and begins play state again
 			if (!Play::IsVisible(obj_boss) || obj_boss.type == TYPE_DESTROYED || gameState.agentState == STATE_DEAD)
 			{
 				Play::DestroyGameObjectsByType(TYPE_BOSS);
-				
 				Play::DrawFontText("132px", "event over", { DISPLAY_WIDTH / 2, 600 }, Play::CENTRE);
 				gameState.bossEvent++;
 				gameState.hasSpawnedBoss = false;
