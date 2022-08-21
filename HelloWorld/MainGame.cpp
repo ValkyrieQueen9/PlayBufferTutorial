@@ -18,9 +18,10 @@ enum Agent8State
 struct GameState
 {
 	int score = 0;
-	Agent8State agentState = STATE_APPEAR;
 	int bossEvent = 0;
-	bool toolsGone = false;
+	int collision = 0;
+	bool hasSpawnedBoss = false;
+	Agent8State agentState = STATE_APPEAR;
 };
 
 GameState gameState;
@@ -192,9 +193,6 @@ void UpdateTools()
 		if (!Play::IsVisible(obj_tool))
 		{
 			Play::DestroyGameObject(id);
-			gameState.toolsGone = true;
-			if(gameState.toolsGone)
-			Play::DrawFontText("64px", "ToolsGone = true", { DISPLAY_WIDTH / 2, 500 }, Play::CENTRE);
 		}
 	}
 }
@@ -277,6 +275,14 @@ void UpdateLasers()
 			}
 		}
 
+		GameObject& obj_boss = Play::GetGameObjectByType(TYPE_BOSS);
+
+		if (Play::IsColliding(obj_laser, obj_boss))
+			{
+				hasCollided = true;
+				gameState.collision++;
+			}
+
 		if (gameState.score < 0)
 			gameState.score = 0;
 
@@ -356,6 +362,9 @@ void UpdateAgent8()
 			obj_agent8.frame = 0;
 			Play::StartAudioLoop("music");
 			gameState.score = 0;
+			gameState.bossEvent = 0;
+			gameState.collision = 0;
+			gameState.hasSpawnedBoss = false;
 
 			for (int id_obj : Play::CollectGameObjectIDsByType(TYPE_TOOL))
 				Play::GetGameObject(id_obj).type = TYPE_DESTROYED;
@@ -374,46 +383,72 @@ void UpdateAgent8()
 
 void UpdateBoss()
 {
-	//trying to make pause before boss event. Added toolsGone bool in gamestate and updatetools. Not working
+	bool hasCollided = false;
+	std::vector<int> vLasers = Play::CollectGameObjectIDsByType(TYPE_LASER);
+	GameObject& obj_fan = Play::GetGameObjectByType(TYPE_FAN);
+	GameObject& obj_boss = Play::GetGameObjectByType(TYPE_BOSS);
+	GameObject& obj_agent8 = Play::GetGameObjectByType(TYPE_AGENT8);
 
-	if (gameState.score >= 500 && gameState.bossEvent == 0)
+	//delete at end
+	Play::DrawFontText("64px", "Boss Event number: " + std::to_string(gameState.bossEvent), { DISPLAY_WIDTH / 2, 400 }, Play::CENTRE);
+
+
+	//Starts Boss event if score is 500 and no event has occured yet
+	if (gameState.score >= 500 && gameState.bossEvent == 0 && gameState.agentState != STATE_DEAD)
 	{
 		gameState.agentState = STATE_BOSS;
-		GameObject& obj_fan = Play::GetGameObjectByType(TYPE_FAN);
 		Play::DrawFontText("132px", "INCOMING!!!", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 }, Play::CENTRE);
+		obj_boss.velocity.x = { -3 };
 
-		if (gameState.toolsGone == true)
+		//Enters boss when all tools have left display and no boss has spawned yet
+		if (!Play::IsVisible(Play::GetGameObjectByType(TYPE_TOOL)) && gameState.hasSpawnedBoss == false)
 		{
-			int id = Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 50, "driver_boss");
-			GameObject& obj_boss = Play::GetGameObjectByType(TYPE_BOSS);
-			obj_boss.velocity.x = { -3 };
+			Play::CreateGameObject(TYPE_BOSS, obj_fan.pos, 50, "driver_boss");
+			Play::PlayAudio("tool");
 			Play::DrawObject(obj_boss);
 			Play::UpdateGameObject(obj_boss);
-
-			if (Play::IsLeavingDisplayArea(obj_boss, Play::HORIZONTAL))
+			if (Play::IsVisible(obj_boss))
 			{
-				Play::DestroyGameObject(id);
-				gameState.bossEvent +1;
-				gameState.agentState = STATE_PLAY;
-				Play::DrawFontText("132px", "event over", { DISPLAY_WIDTH / 2, 600 }, Play::CENTRE);
+				gameState.hasSpawnedBoss = true;
 			}
 		}
-		
 
-		
+		//When boss has spawned check for its defeat or exit
+		if (gameState.hasSpawnedBoss)
+		{
+			//When boss is hit 5 times, destroy it
+			if (gameState.collision == 5)
+			{
+				obj_boss.type = TYPE_DESTROYED;
+				gameState.score += 500;
+			}
+
+			//When boss has been destroyed or leaves display, mark event has over and begin play state again
+			if (!Play::IsVisible(obj_boss) || obj_boss.type == TYPE_DESTROYED || gameState.agentState == STATE_DEAD)
+			{
+				Play::DestroyGameObjectsByType(TYPE_BOSS);
+				
+				Play::DrawFontText("132px", "event over", { DISPLAY_WIDTH / 2, 600 }, Play::CENTRE);
+				gameState.bossEvent++;
+				gameState.hasSpawnedBoss = false;
+					if (gameState.agentState != STATE_DEAD)
+					{
+						gameState.agentState = STATE_PLAY;
+					}
+			}
+
+			//Agent can be killed by boss
+			if (gameState.agentState != STATE_DEAD && Play::IsColliding(obj_boss, obj_agent8))
+			{
+				Play::StopAudioLoop("music");
+				Play::PlayAudio("die");
+				gameState.agentState = STATE_DEAD;
+			}
+
+			Play::DrawObject(obj_boss);
+			Play::UpdateGameObject(obj_boss);
+		}
 	}
 }
-
-
-
-	//Create large boss with screwdriver sprite and add coins after
-		//Maybe: make sprite poke out once then fast move out + make it killable with more shoots
-
-	//Once boss is off display either destroyed or leaves - restart update tools
-
-	//Make sure game runs properly if restarted
-
-	//Later: Add effects if killed or make it fade as you shoot
-
 
 
